@@ -164,7 +164,7 @@ function validatePawnMove(
     if (rankDiff === direction) {
       return (
         !!targetSquare.piece ||
-        canEnpassant(piece, sourceSquare, targetSquare, boardState)
+        canEnpassant(piece, sourceSquare, targetSquare, boardState).isValid
       );
     }
     return false; // Invalid move
@@ -178,15 +178,15 @@ function validatePawnMove(
   return false; // Invalid move
 }
 
-function canEnpassant(
+export function canEnpassant(
   piece: ChessPiece,
   sourceSquare: ChessBoardSquare,
   targetSquare: ChessBoardSquare,
   boardState: ChessBoardState,
-): boolean {
+): { isValid: boolean; capturedPawnPosition?: string } {
   // Check if the move is a valid en passant capture
   const lastMove = boardState.moveHistory[boardState.moveHistory.length - 1];
-  if (!lastMove) return false; // No previous move, so en passant is not possible
+  if (!lastMove) return { isValid: false }; // No previous move, so en passant is not possible
   const lastMovedPiece = boardState.squares
     .flatMap((sq) => (sq.piece ? [sq.piece] : []))
     .find((p) => p.id === lastMove.pieceId);
@@ -205,29 +205,51 @@ function canEnpassant(
     const direction = piece.color === ChessPieceColorEnum.White ? 1 : -1;
     const rankDiff = parseInt(targetRank) - parseInt(sourceRank);
     const fileDiff = targetFile.charCodeAt(0) - sourceFile.charCodeAt(0);
-
-    console.log("Checking en passant conditions:", {
-      lastMovedPiece,
-      rankDiff,
-      fileDiff,
-      targetSquarePosition: targetSquare.position,
-      expectedTargetPosition: `${String.fromCharCode(
-        lastMovedPiece.position[0].charCodeAt(0),
-      )}${lastMovedPiece.position[1]}`,
-    }); // Debugging log to check en passant conditions
-
+    const expectedTargetPosition = `${String.fromCharCode(
+      lastMovedPiece.position[0].charCodeAt(0),
+    )}${lastMovedPiece.position[1]}`; //current position of last moved piece
+    const isMovingAboveLastPiece =
+      parseInt(targetRank) - parseInt(expectedTargetPosition[1]);
+    const captureRouteDiff =
+      targetFile.charCodeAt(0) - expectedTargetPosition[0].charCodeAt(0);
     if (
       rankDiff === direction &&
       Math.abs(fileDiff) === 1 &&
-      targetSquare.position ===
-        `${String.fromCharCode(
-          lastMovedPiece.position[0].charCodeAt(0),
-        )}${lastMovedPiece.position[1]}`
+      isMovingAboveLastPiece === direction &&
+      captureRouteDiff === 0
     ) {
-      return true; // Valid en passant capture
+      return { isValid: true, capturedPawnPosition: expectedTargetPosition }; // Valid en passant capture
+    }
+  }
+  return { isValid: false };
+}
+
+export function canPromotePawn(
+  piece: ChessPiece,
+  targetSquare: ChessBoardSquare,
+): boolean {
+  const targetRank = targetSquare.position[1];
+  if (piece.type === ChessPieceTypeEnum.Pawn) {
+    if (
+      (piece.color === ChessPieceColorEnum.White && targetRank === "8") ||
+      (piece.color === ChessPieceColorEnum.Black && targetRank === "1")
+    ) {
+      return true; // Pawn can be promoted
     }
   }
   return false;
+}
+
+export function promotePawn(
+  originalPiece: ChessPiece,
+  targetSquare: ChessBoardSquare,
+  newType: ChessPieceTypeEnum,
+): ChessPiece {
+  return {
+    ...originalPiece,
+    type: newType,
+    position: targetSquare.position
+  };
 }
 
 function validateRookMove(
@@ -371,8 +393,12 @@ export function validateKingMove(
 export function validateCapture(
   piece: ChessPiece,
   targetSquare: ChessBoardSquare,
+  isEnPassantCapture = false,
 ): boolean {
   if (targetSquare.piece && targetSquare.piece.color !== piece.color) {
+    return true;
+  }
+  if (isEnPassantCapture) {
     return true;
   }
   return false;

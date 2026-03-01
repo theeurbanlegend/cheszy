@@ -1,8 +1,10 @@
 "use client";
-import { ChessBoardState } from "@/types/chess";
+import { ChessBoardState, ChessPieceTypeEnum } from "@/types/chess";
 import { useEffect, useState } from "react";
 import ChessBoardSquare from "./ChessBoardSquare";
 import {
+  canEnpassant,
+  canPromotePawn,
   getValidMovesForPiece,
   initializeChessBoard,
   validateCapture,
@@ -10,6 +12,11 @@ import {
 } from "@/lib/chess";
 
 const ChessBoard = () => {
+  const [showPromotion, setShowPromotion] = useState<{
+    position: string;
+    color: string;
+    pieceId: string;
+  } | null>(null);
   const [validMoves, setValidMoves] = useState<string[]>([]);
   const [activeSquare, setActiveSquare] = useState<{
     position: string;
@@ -58,8 +65,6 @@ const ChessBoard = () => {
       (sq) => sq.position === toPosition,
     );
     if (!piece || !sourceSquare || !targetSquare) return;
-    let isCapture = targetSquare && !!targetSquare.piece;
-
     const isMoveValid = validateMove(
       piece,
       sourceSquare,
@@ -67,9 +72,26 @@ const ChessBoard = () => {
       boardState,
     );
     if (!isMoveValid) return; // If the move is not valid, exit early
+    const { isValid: isEnpassantCapture, capturedPawnPosition } = canEnpassant(
+      piece,
+      sourceSquare,
+      targetSquare,
+      boardState,
+    );
+    const isCapture =
+      (targetSquare && !!targetSquare.piece) || isEnpassantCapture;
     if (isCapture) {
-      const isCaptureValid = validateCapture(piece, targetSquare);
+      const isCaptureValid = validateCapture(
+        piece,
+        targetSquare,
+        isEnpassantCapture,
+      );
       if (!isCaptureValid) return; // If the capture is not valid, exit early
+    }
+    const canPromote = canPromotePawn(piece, targetSquare);
+
+    if (canPromote) {
+      setShowPromotion({ position: toPosition, color: piece.color, pieceId });
     }
 
     setBoardState((prevState) => {
@@ -88,6 +110,15 @@ const ChessBoard = () => {
                   position: toPosition,
                 }
               : null,
+          };
+        } else if (
+          isEnpassantCapture &&
+          capturedPawnPosition &&
+          square.position === capturedPawnPosition
+        ) {
+          return {
+            ...square,
+            piece: null, // Remove the captured pawn from the board
           };
         }
         return square;
@@ -158,6 +189,36 @@ const ChessBoard = () => {
     }
   };
 
+  const handlePromote = (
+    piecePosition: string,
+    newType: ChessPieceTypeEnum,
+    pieceId?: string,
+  ) => {
+    setShowPromotion(null);
+    if (!pieceId) return;
+    setBoardState((prevState) => {
+      const newSquares = prevState.squares.map((square) => {
+        if (square.position === piecePosition) {
+          const movingPiece = square.piece;
+          return {
+            ...square,
+            piece: movingPiece
+              ? {
+                  ...movingPiece,
+                  type: newType,
+                }
+              : null,
+          };
+        }
+        return square;
+      });
+      return {
+        squares: newSquares,
+        moveHistory: prevState.moveHistory, // No need to update move history for promotion
+      };
+    });
+  };
+
   return (
     <div className="border-2 border-black grid grid-cols-8 grid-rows-8 gap-0 w-fit h-fit">
       {boardState.squares.map((square, index) => (
@@ -175,6 +236,8 @@ const ChessBoard = () => {
           showDot={validMoves.includes(square.position)}
           sourceHighlight={activeSquare?.position === square.position}
           targetHighlight={hoveredSquare === square.position}
+          showPromoteMenu={showPromotion?.position === square.position}
+          onPromote={handlePromote}
         />
       ))}
     </div>

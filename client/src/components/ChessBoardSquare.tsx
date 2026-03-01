@@ -1,6 +1,10 @@
-import { ChessPiece as ChessPieceType } from "@/types/chess";
+import {
+  ChessPiece as ChessPieceType,
+  ChessPieceTypeEnum,
+} from "@/types/chess";
 import ChessPiece from "./ChessPiece";
 import { useCallback } from "react";
+import PromoteDropdown from "./PromoteDropdown";
 
 interface ChessBoardSquareProps {
   index: number;
@@ -8,6 +12,7 @@ interface ChessBoardSquareProps {
   piece: ChessPieceType | null;
   color: "light" | "dark";
   showDot?: boolean; // Optional prop to show a dot for valid moves
+  showPromoteMenu?: boolean; // Optional prop to show promotion options when a pawn reaches the last rank
   sourceHighlight?: boolean; // Optional prop to highlight the square as a source of a move
   targetHighlight?: boolean; // Optional prop to highlight the square as a target of a move
   onPieceDragStart?: (pieceId: string, position: string) => void;
@@ -19,6 +24,11 @@ interface ChessBoardSquareProps {
     fromPosition: string,
     toPosition: string,
   ) => void; // Optional callback for when a piece is moved
+  onPromote?: (
+    piecePosition: string,
+    newType: ChessPieceTypeEnum,
+    pieceId?: string,
+  ) => void; // Optional callback for when a pawn is promoted
 }
 
 const ChessBoardSquare = ({
@@ -31,12 +41,16 @@ const ChessBoardSquare = ({
   color,
   className,
   onPieceDragStart,
+  showPromoteMenu,
   onMovePiece,
   onSquareDragOver,
   onSquareClick,
+  onPromote,
 }: ChessBoardSquareProps) => {
   const showLeftCoordinate = index % 8 === 0;
   const showBottomCoordinate = index >= 56;
+  const canShowPromoteMenu =
+    showPromoteMenu && (position[1] === "8" || position[1] === "1");
 
   const handleDragOver = useCallback(
     (ev: React.DragEvent<HTMLDivElement>) => {
@@ -111,6 +125,15 @@ const ChessBoardSquare = ({
             WebkitMaskImage:
               "radial-gradient(circle, transparent 75%, black 30%)",
           }}
+        />
+      )}
+      {canShowPromoteMenu && piece && (
+        <PromoteDropdown
+          color={piece.color}
+          onPromote={(newType) => {
+            onPromote?.(position, newType, piece.id);
+          }}
+          position={position}
         />
       )}
     </div>
